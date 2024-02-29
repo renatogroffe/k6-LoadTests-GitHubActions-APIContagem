@@ -1,0 +1,59 @@
+name: k6-load-tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  EndpointTests: "https://groffecanaldotnetcontagem.purplehill-3fd75d15.eastus.azurecontainerapps.io/contador"
+  TestsDirectory: "./src"
+  LoadTestsScript: "loadtests-http-contagem.js"
+  SimultaneousUsers: 50
+  TotalRequests: 3000
+  
+jobs:
+
+  tests:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Instalar o k6
+      run: |
+        sudo gpg -k
+        sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+        echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install k6
+        echo ''
+        echo 'Verificando instalacao do k6'
+        echo ''
+        k6
+    - name: Replace tokens
+      uses: cschleiden/replace-tokens@v1.3
+      with:
+        files: ${{ env.TestsDirectory }}/${{ env.LoadTestsScript }}
+    - name: Exibir conteudo do script de testes apos ajustes
+      run: |
+        echo '** Arquivos/diretórios após a execução dos testes --> $(testsDirectory)'
+        cd ${{ env.TestsDirectory }}
+        cat ${{ env.LoadTestsScript }}
+    - name: Executar os testes de carga com k6
+      run: |
+        cd ${{ env.TestsDirectory }}
+        k6 run ${{ env.LoadTestsScript }} --vus ${{ env.SimultaneousUsers }} --iterations ${{ env.TotalRequests }}
+    - name: Listar arquivos no diretorio de testes
+      run: |
+        echo '** Arquivos/diretórios após a execução dos testes --> $(testsDirectory)'
+        cd ${{ env.TestsDirectory }}
+        ls
+      if: always()
+    - name: Criar Test Summary
+      uses: test-summary/action@v2.3
+      if: always()
+      with:
+        paths: ${{ env.TestsDirectory }}/loadtests-results.xml
